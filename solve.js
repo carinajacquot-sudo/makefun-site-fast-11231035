@@ -72,19 +72,12 @@ function longDate(date) {
   return `${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
 }
 
+const RE_WORDS = /\S+/g;
+
 /** Les mots d'un corps : ses suites de caractères non blancs. */
 function wordsOf(text) {
-  let n = 0;
-  let inWord = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    const space =
-      c === 32 || (c >= 9 && c <= 13) || c === 160 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) ||
-      c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff;
-    if (space) inWord = false;
-    else if (!inWord) { inWord = true; n++; }
-  }
-  return n;
+  const found = text.match(RE_WORDS);
+  return found === null ? 0 : found.length;
 }
 
 // ---------------------------------------------------------------- front matter
@@ -167,7 +160,7 @@ function valueOf(key, raw) {
 
 /** { data, body } ou { error } : le premier motif de refus. */
 function parseFrontMatter(text) {
-  const lines = text.split('\n');
+  const lines = text.split('\n', 40);
   if (lines[0] !== '---') return { error: 'no front matter' };
   let close = -1;
   for (let i = 1; i < lines.length; i++) {
@@ -190,7 +183,10 @@ function parseFrontMatter(text) {
     data[key] = v.value;
   }
   if (!Object.hasOwn(data, 'title')) return { error: 'no title' };
-  return { data, body: lines.slice(close + 1).join('\n') };
+  // le corps : tout ce qui suit la ligne de fermeture, sans recopier les lignes
+  let at = 0;
+  for (let i = 0; i <= close; i++) at += lines[i].length + 1;
+  return { data, body: at >= text.length ? '' : text.slice(at) };
 }
 
 // ---------------------------------------------------------------- résolution des liens
