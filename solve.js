@@ -160,7 +160,7 @@ function valueOf(key, raw) {
 
 /** { data, body } ou { error } : le premier motif de refus. */
 function parseFrontMatter(text) {
-  const lines = text.split('\n', 40);
+  const lines = text.split('\n', 41);
   if (lines[0] !== '---') return { error: 'no front matter' };
   let close = -1;
   for (let i = 1; i < lines.length; i++) {
@@ -183,10 +183,10 @@ function parseFrontMatter(text) {
     data[key] = v.value;
   }
   if (!Object.hasOwn(data, 'title')) return { error: 'no title' };
-  // le corps : tout ce qui suit la ligne de fermeture, sans recopier les lignes
+  // fin du front matter : le saut de ligne qui suit la ligne de fermeture
   let at = 0;
-  for (let i = 0; i <= close; i++) at += lines[i].length + 1;
-  return { data, body: at >= text.length ? '' : text.slice(at) };
+  for (let i = 0; i <= close && i < lines.length; i++) at += lines[i].length + 1;
+  return { data, bodyStart: at };
 }
 
 // ---------------------------------------------------------------- résolution des liens
@@ -478,13 +478,14 @@ function inlineRange(src, p, e) {
 const inline = (s) => inlineRange(s, 0, s.length);
 
 /** Le corps rendu : son HTML, sa table des matières (niveaux 2 et 3) et son extrait. */
-function renderMarkdown(src) {
+function renderMarkdown(src, start) {
   const n = src.length;
+  const S0 = start === undefined ? 0 : start;
   const ids = new Set();
   let out = '';
   const toc = [];
   let excerpt = null;
-  let p = 0;
+  let p = S0;
   while (p < n) {
     let e = lineEndOf(src, p);
 
@@ -888,7 +889,7 @@ function cardOf(s) {
     date_long: d.date === undefined ? '' : longDate(d.date),
     summary: d.summary ?? '',
     excerpt: s.excerpt,
-    reading_minutes: Math.max(1, Math.ceil(wordsOf(s.body) / 200)),
+    reading_minutes: Math.max(1, Math.ceil(wordsOf(s.text.slice(s.bodyStart)) / 200)),
     tags: s.tagRefs.map((t) => ({ name: t.name, slug: t.slug, url: t.url })),
   };
 }
@@ -955,7 +956,7 @@ export function run(input) {
     const fm = parseFrontMatter(s.text);
     if (fm.error !== undefined) { report.push('refused ' + s.path + ': ' + fm.error); continue; }
     s.data = fm.data;
-    s.body = fm.body;
+    s.bodyStart = fm.bodyStart;
     s.post = s.path.startsWith('posts/');
     let own;
     if (s.path.startsWith('tags/')) own = 'tags';
@@ -995,7 +996,7 @@ export function run(input) {
     const s = kept[i];
     CUR_PATH = s.path;
     CUR_DIR = dirOf(s.path);
-    const md = renderMarkdown(s.body);
+    const md = renderMarkdown(s.text, s.bodyStart);
     s.html = md.html;
     s.toc = md.toc;
     s.excerpt = md.excerpt;
